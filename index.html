@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Sentence Categorizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📄 PDF Sentence Categorizer</h1>
+        
+        <div class="config-section">
+            <div class="input-group">
+                <label>LongCat API Key:</label>
+                <input type="text" id="apiKey" placeholder="Enter your LongCat API key">
+            </div>
+            
+            <div class="input-group">
+                <label>Batch Size (sentences per request):</label>
+                <input type="number" id="batchSize" value="50" min="10" max="100">
+            </div>
+            
+            <div class="input-group">
+                <label>Select PDF File:</label>
+                <input type="file" id="pdfFile" accept=".pdf">
+            </div>
+            
+            <button class="btn" id="startBtn" onclick="startProcessing()">Start Processing</button>
+        </div>
+
+        <div class="progress-section" id="progressSection">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+            <div class="status" id="statusText">Initializing...</div>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <h2>Categorized Results</h2>
+            <div id="categoriesContainer"></div>
+            <button class="btn download-btn" onclick="downloadResults()">Download as JSON</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
