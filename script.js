@@ -21,10 +21,10 @@ async function extractTextFromPDF(file) {
 
 function splitIntoSentences(text) {
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
-    return sentences.map(s => s.trim()).filter(s => s.length > 10);
+    return sentences.map(s => s.trim()).filter(s => s.length > 20); // Improved filter
 }
 
-async function callLongCatAPI(apiKey, messages, maxTokens = 2000) {
+async function callLongCatAPI(apiKey, messages, maxTokens = 3000) { // Increased maxTokens
     const response = await fetch('https://api.longcat.chat/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -35,7 +35,7 @@ async function callLongCatAPI(apiKey, messages, maxTokens = 2000) {
             model: 'LongCat-Flash-Chat',
             messages: messages,
             max_tokens: maxTokens,
-            temperature: 0.3
+            temperature: 0.2 // Lowered for consistency
         })
     });
 
@@ -63,46 +63,36 @@ function showError(message) {
 async function identifyCategories(apiKey, sampleSentences) {
     updateProgress(5, 'Step 1/3: Identifying categories from document...');
     
-    const prompt = `Analyze these sample sentences from a document and identify 5-10 main categories that cover all topics. Return ONLY a JSON array of category names, nothing else.
+    const prompt = `Analyze these sample sentences from a document and identify 5-15 main categories that comprehensively cover all topics. Return ONLY a JSON array of category names.
 
 Sample sentences:
-${sampleSentences.slice(0, 100).join('\n')}
+${sampleSentences.slice(0, 150).join('\n')}  // Larger sample
 
-Return format: ["Category1", "Category2", "Category3", ...]`;
+Return format: ["Category1", "Category2", ...]`;
 
-    const messages = [
-        {role: 'user', content: prompt}
-    ];
-
+    const messages = [{role: 'user', content: prompt}];
     const response = await callLongCatAPI(apiKey, messages);
     const jsonMatch = response.match(/\[.*\]/s);
-    if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-    }
-    throw new Error('Failed to parse categories from AI response');
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    throw new Error('Failed to parse categories');
 }
 
 async function categorizeBatch(apiKey, sentences, categories, batchIndex, totalBatches) {
     const percent = 10 + (batchIndex / totalBatches) * 80;
     updateProgress(percent, `Step 2/3: Categorizing batch ${batchIndex + 1}/${totalBatches}...`);
 
-    const prompt = `Categorize each sentence into ONE of these categories: ${categories.join(', ')}.
+    const prompt = `Categorize each sentence into EXACTLY ONE of these categories: ${categories.join(', ')}. If unsure, use "Other".
 
 Sentences:
 ${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-Return ONLY a JSON array where each element is the category name for the corresponding sentence number. Format: ["Category", "Category", ...]`;
+Return ONLY JSON array: ["Category", "Category", ...]`;
 
-    const messages = [
-        {role: 'user', content: prompt}
-    ];
-
+    const messages = [{role: 'user', content: prompt}];
     const response = await callLongCatAPI(apiKey, messages);
     const jsonMatch = response.match(/\[.*\]/s);
-    if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-    }
-    throw new Error('Failed to parse categorization from AI response');
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    throw new Error('Failed to parse categorization');
 }
 
 function displayResults() {
@@ -132,7 +122,7 @@ function displayResults() {
     document.getElementById('resultsSection').style.display = 'block';
 }
 
-function downloadResults() {
+function downloadJson() {
     const dataStr = JSON.stringify(categorizedSentences, null, 2);
     const dataBlob = new Blob([dataStr], {type: 'application/json'});
     const url = URL.createObjectURL(dataBlob);
@@ -143,18 +133,45 @@ function downloadResults() {
     URL.revokeObjectURL(url);
 }
 
+function downloadPdf() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = 10;
+    doc.setFontSize(16);
+    doc.text('Categorized Sentences', 10, y);
+    y += 10;
+
+    for (const [category, sentences] of Object.entries(categorizedSentences)) {
+        doc.setFontSize(14);
+        doc.text(category, 10, y);
+        y += 8;
+        doc.setFontSize(10);
+        sentences.forEach(sentence => {
+            const lines = doc.splitTextToSize(sentence, 180);
+            doc.text(lines, 10, y);
+            y += lines.length * 6;
+            if (y > 270) {
+                doc.addPage();
+                y = 10;
+            }
+        });
+        y += 5;
+        if (y > 270) {
+            doc.addPage();
+            y = 10;
+        }
+    }
+
+    doc.save('categorized_sentences.pdf');
+}
+
 async function startProcessing() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const batchSize = parseInt(document.getElementById('batchSize').value);
     const fileInput = document.getElementById('pdfFile');
 
-    if (!apiKey) {
-        alert('Please enter your LongCat API key');
-        return;
-    }
-
-    if (!fileInput.files[0]) {
-        alert('Please select a PDF file');
+    if (!apiKey || !fileInput.files[0]) {
+        alert('API key and PDF required');
         return;
     }
 
@@ -163,26 +180,21 @@ async function startProcessing() {
     document.getElementById('resultsSection').style.display = 'none';
 
     try {
-        // Step 1: Extract text from PDF
         updateProgress(0, 'Extracting text from PDF...');
         const text = await extractTextFromPDF(fileInput.files[0]);
         allSentences = splitIntoSentences(text);
         
-        if (allSentences.length === 0) {
-            throw new Error('No sentences found in PDF');
-        }
+        if (allSentences.length === 0) throw new Error('No sentences found');
 
         updateProgress(3, `Found ${allSentences.length} sentences. Analyzing...`);
 
-        // Step 2: Identify categories
         categories = await identifyCategories(apiKey, allSentences);
-        updateProgress(10, `Identified ${categories.length} categories: ${categories.join(', ')}`);
+        updateProgress(10, `Identified ${categories.length} categories`);
 
-        // Initialize category storage
         categorizedSentences = {};
         categories.forEach(cat => categorizedSentences[cat] = []);
+        categorizedSentences['Other'] = []; // Added fallback
 
-        // Step 3: Process in batches
         const totalBatches = Math.ceil(allSentences.length / batchSize);
         
         for (let i = 0; i < totalBatches; i++) {
@@ -192,25 +204,19 @@ async function startProcessing() {
 
             const batchCategories = await categorizeBatch(apiKey, batch, categories, i, totalBatches);
 
-            // Store categorized sentences
             batch.forEach((sentence, idx) => {
-                const category = batchCategories[idx] || 'Uncategorized';
-                if (!categorizedSentences[category]) {
-                    categorizedSentences[category] = [];
-                }
+                const category = batchCategories[idx] || 'Other';
                 categorizedSentences[category].push(sentence);
             });
 
-            // Small delay to avoid rate limits
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500)); 
         }
 
-        // Display results
         displayResults();
 
     } catch (error) {
         showError(error.message);
-        console.error('Processing error:', error);
+        console.error(error);
     } finally {
         document.getElementById('startBtn').disabled = false;
     }
