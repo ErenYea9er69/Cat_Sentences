@@ -208,180 +208,185 @@ function downloadResults() {
 }
 
 function downloadAsPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 20;
-  const contentWidth = pageWidth - (margin * 2);
-  let yPosition = margin;
-
-  // Store page numbers where each category starts for links
-  const categoryPages = {};
-
-  // Helper function to add a new page
-  function addNewPage() {
-    doc.addPage();
-    yPosition = margin;
+  try {
+    const { jsPDF } = window.jspdf;
     
-    // Add page number footer
-    doc.setFontSize(9);
-    doc.setTextColor(128, 128, 128);
-    doc.text(
-      `${doc.internal.getNumberOfPages()}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' }
-    );
-    doc.setTextColor(0, 0, 0);
-  }
-
-  // ============ TITLE PAGE ============
-  doc.setFontSize(32);
-  doc.setFont(undefined, 'bold');
-  doc.text('Categorized Sentences', pageWidth / 2, 80, { align: 'center' });
-  
-  doc.setFontSize(12);
-  doc.setFont(undefined, 'normal');
-  const today = new Date().toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  doc.text(`Generated on ${today}`, pageWidth / 2, 95, { align: 'center' });
-
-  // Start TOC on new page
-  addNewPage();
-
-  // ============ TABLE OF CONTENTS ============
-  doc.setFontSize(18);
-  doc.setFont(undefined, 'bold');
-  doc.text('Table of Contents', margin, yPosition);
-  yPosition += 12;
-
-  doc.setFontSize(10);
-  
-  let categoryIndex = 1;
-  const sortedCategories = Object.entries(categorizedSentences).sort((a, b) => b[1].length - a[1].length);
-  
-  for (const [category, sentences] of sortedCategories) {
-    if (yPosition > pageHeight - 25) {
-      addNewPage();
+    if (!jsPDF) {
+      alert('PDF library not loaded. Please refresh the page and try again.');
+      return;
     }
     
-    // Store the position for later linking (we'll update after we know the actual pages)
-    const tocText = `${categoryIndex}. ${category}`;
-    const tocY = yPosition;
-    const tocPage = doc.internal.getNumberOfPages();
+    const doc = new jsPDF();
     
-    // Store TOC entry info for later updating
-    if (!doc.tocEntries) doc.tocEntries = [];
-    doc.tocEntries.push({
-      category: category,
-      tocPage: tocPage,
-      tocY: tocY,
-      tocText: tocText,
-      index: categoryIndex
-    });
-    
-    // Calculate available width for category name
-    const countText = `(${sentences.length} sentences)`;
-    const countWidth = doc.getTextWidth(countText);
-    const availableWidth = contentWidth - countWidth - 10;
-    
-    // Wrap category text if needed
-    const wrappedCategory = doc.splitTextToSize(`${categoryIndex}. ${category}`, availableWidth);
-    
-    // Add the category name
-    doc.setFont(undefined, 'normal');
-    doc.text(wrappedCategory, margin + 5, yPosition);
-    
-    // Add sentence count aligned to the right on the first line
-    doc.text(countText, pageWidth - margin - 5, yPosition, { align: 'right' });
-    
-    yPosition += (wrappedCategory.length * 5) + 2;
-    categoryIndex++;
-  }
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPosition = margin;
 
-  // ============ CATEGORY CONTENT PAGES ============
-  addNewPage();
+    // Store page numbers where each category starts for links
+    const categoryPages = {};
 
-  categoryIndex = 1;
-  for (const [category, sentences] of sortedCategories) {
-    // Store the page where this category starts
-    categoryPages[category] = doc.internal.getNumberOfPages();
-    
-    // Check if we need a new page for category header
-    if (yPosition > pageHeight - 50) {
-      addNewPage();
-      categoryPages[category] = doc.internal.getNumberOfPages();
+    // Helper function to add a new page
+    function addNewPage() {
+      doc.addPage();
+      yPosition = margin;
+      
+      // Add page number footer
+      doc.setFontSize(9);
+      doc.setTextColor(128, 128, 128);
+      doc.text(
+        `${doc.internal.getNumberOfPages()}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      );
+      doc.setTextColor(0, 0, 0);
     }
 
-    // Category Header (Bold)
-    doc.setFontSize(14);
+    // ============ TITLE PAGE ============
+    doc.setFontSize(32);
     doc.setFont(undefined, 'bold');
-    const categoryTitle = `${categoryIndex}. ${category}`;
+    doc.text('Categorized Sentences', pageWidth / 2, 80, { align: 'center' });
     
-    // Wrap the title if it's too long
-    const wrappedTitle = doc.splitTextToSize(categoryTitle, contentWidth - 30);
-    doc.text(wrappedTitle, margin, yPosition);
-    
-    const titleHeight = wrappedTitle.length * 6;
-    
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    doc.text(`${sentences.length} sentences`, pageWidth - margin, yPosition, { align: 'right' });
-    
-    yPosition += titleHeight + 2;
-    
-    // Draw a line under the category
-    doc.setDrawColor(0, 0, 0);
-    doc.line(margin, yPosition, pageWidth - margin, yPosition);
-    yPosition += 8;
-
-    // Sentences
     doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    const today = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    doc.text(`Generated on ${today}`, pageWidth / 2, 95, { align: 'center' });
+
+    // Start TOC on new page
+    addNewPage();
+
+    // ============ TABLE OF CONTENTS ============
+    doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
+    doc.text('Table of Contents', margin, yPosition);
+    yPosition += 12;
+
+    doc.setFontSize(10);
     
-    sentences.forEach((sentence, idx) => {
-      // Check if we need a new page
-      if (yPosition > pageHeight - 35) {
+    let categoryIndex = 1;
+    const sortedCategories = Object.entries(categorizedSentences).sort((a, b) => b[1].length - a[1].length);
+    
+    // Store TOC entries
+    const tocEntries = [];
+    
+    for (const [category, sentences] of sortedCategories) {
+      if (yPosition > pageHeight - 25) {
         addNewPage();
       }
-
-      // Sentence number
-      const sentenceNum = `${idx + 1}.`;
-      doc.text(sentenceNum, margin, yPosition);
       
-      // Sentence text with proper wrapping
-      const textX = margin + 10;
-      const wrapped = doc.splitTextToSize(sentence, contentWidth - 10);
-      doc.text(wrapped, textX, yPosition);
+      // Store the position for later linking
+      const tocY = yPosition;
+      const tocPage = doc.internal.getNumberOfPages();
       
-      yPosition += (wrapped.length * 6) + 3;
-    });
-    
-    yPosition += 8; // Space after category
-    categoryIndex++;
-  }
+      tocEntries.push({
+        category: category,
+        tocPage: tocPage,
+        tocY: tocY,
+        index: categoryIndex
+      });
+      
+      // Calculate available width for category name
+      const countText = `(${sentences.length} sentences)`;
+      doc.setFont(undefined, 'normal');
+      const countWidth = doc.getTextWidth(countText);
+      const availableWidth = contentWidth - countWidth - 10;
+      
+      // Wrap category text if needed
+      const wrappedCategory = doc.splitTextToSize(`${categoryIndex}. ${category}`, availableWidth);
+      
+      // Add the category name
+      doc.text(wrappedCategory, margin + 5, yPosition);
+      
+      // Add sentence count aligned to the right on the first line
+      doc.text(countText, pageWidth - margin - 5, yPosition, { align: 'right' });
+      
+      yPosition += (wrappedCategory.length * 5) + 2;
+      categoryIndex++;
+    }
 
-  // ============ UPDATE TABLE OF CONTENTS LINKS ============
-  // Now go back and update all the TOC links with the actual page numbers
-  if (doc.tocEntries) {
-    doc.tocEntries.forEach(entry => {
+    // ============ CATEGORY CONTENT PAGES ============
+    addNewPage();
+
+    categoryIndex = 1;
+    for (const [category, sentences] of sortedCategories) {
+      // Store the page where this category starts
+      categoryPages[category] = doc.internal.getNumberOfPages();
+      
+      // Check if we need a new page for category header
+      if (yPosition > pageHeight - 50) {
+        addNewPage();
+        categoryPages[category] = doc.internal.getNumberOfPages();
+      }
+
+      // Category Header (Bold)
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      const categoryTitle = `${categoryIndex}. ${category}`;
+      
+      // Wrap the title if it's too long
+      const wrappedTitle = doc.splitTextToSize(categoryTitle, contentWidth - 30);
+      doc.text(wrappedTitle, margin, yPosition);
+      
+      const titleHeight = wrappedTitle.length * 6;
+      
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`${sentences.length} sentences`, pageWidth - margin, yPosition, { align: 'right' });
+      
+      yPosition += titleHeight + 2;
+      
+      // Draw a line under the category
+      doc.setDrawColor(0, 0, 0);
+      doc.line(margin, yPosition, pageWidth - margin, yPosition);
+      yPosition += 8;
+
+      // Sentences
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      
+      sentences.forEach((sentence, idx) => {
+        // Check if we need a new page
+        if (yPosition > pageHeight - 35) {
+          addNewPage();
+        }
+
+        // Sentence number
+        const sentenceNum = `${idx + 1}.`;
+        doc.text(sentenceNum, margin, yPosition);
+        
+        // Sentence text with proper wrapping
+        const textX = margin + 10;
+        const wrapped = doc.splitTextToSize(sentence, contentWidth - 10);
+        doc.text(wrapped, textX, yPosition);
+        
+        yPosition += (wrapped.length * 6.5) + 3;
+      });
+      
+      yPosition += 8; // Space after category
+      categoryIndex++;
+    }
+
+    // ============ UPDATE TABLE OF CONTENTS LINKS ============
+    tocEntries.forEach(entry => {
       const targetPage = categoryPages[entry.category];
       if (targetPage) {
         doc.setPage(entry.tocPage);
         
         // Calculate available width for category name
-        const countText = `(${categorizedSentences[entry.category].length} sentences)`;
+        const sentences = categorizedSentences[entry.category];
+        const countText = `(${sentences.length} sentences)`;
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
         const countWidth = doc.getTextWidth(countText);
         const availableWidth = contentWidth - countWidth - 10;
         
         // Create the clickable link
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
         doc.setTextColor(0, 0, 255); // Blue color for links
         
         const linkText = `${entry.index}. ${entry.category}`;
@@ -393,12 +398,16 @@ function downloadAsPDF() {
         doc.setTextColor(0, 0, 0); // Reset to black
       }
     });
+
+    // Go back to last page to ensure proper page count
+    doc.setPage(doc.internal.getNumberOfPages());
+
+    doc.save('categorized_sentences.pdf');
+    
+  } catch (error) {
+    console.error('PDF Generation Error:', error);
+    alert('Error generating PDF: ' + error.message);
   }
-
-  // Go back to last page to ensure proper page count
-  doc.setPage(doc.internal.getNumberOfPages());
-
-  doc.save('categorized_sentences.pdf');
 }
 
 async function startProcessing() {
