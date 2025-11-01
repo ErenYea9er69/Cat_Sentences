@@ -63,27 +63,27 @@ function showError(message) {
 async function identifyCategories(apiKey, sampleSentences) {
   updateProgress(5, 'Step 1/3: Identifying categories from document...');
 
-  const prompt = `Analyze these sample sentences and identify EXACTLY 20-30 THEMATIC categories based on the main topics and subjects discussed in the document.
+  const prompt = `Analyze these sample sentences and identify EXACTLY 25-40 CLEAR and SPECIFIC THEMATIC categories based on the main topics and subjects discussed in the document.
 
 CRITICAL RULES:
-- Create EXACTLY between 20 and 30 categories
-- Categories should be TOPICS or THEMES, not individual objects or actions
-- Think about the SUBJECT MATTER: What is this sentence about? (e.g., "Transportation", "Architecture", "Daily Life", "Technology")
-- DO NOT create categories like "Canoe use" or "Barrel presence" - these are too specific
-- DO create categories like "Water Transportation", "Historical Travel", "Building Navigation", "Household Items"
-- Group related concepts under broader themes
-- Each category should potentially contain multiple sentences about that topic
-- Use clear, topic-based names (2-4 words maximum)
+- Create EXACTLY between 25 and 40 categories
+- Categories should be CLEAR, SPECIFIC TOPICS or THEMES
+- Each category should be distinct and not overlap with others
+- Think about the SUBJECT MATTER: What is this sentence about?
+- Use DESCRIPTIVE names that clearly indicate what the category contains
+- Categories should be specific enough to be meaningful but broad enough to contain multiple sentences
+- Use clear, descriptive names (2-5 words)
 - NO special characters, quotes, or symbols in category names
+- Avoid vague or overly general categories
 
-Example of GOOD categories: "Maritime Activities", "Historical Transportation", "Urban Architecture", "Food and Dining"
-Example of BAD categories: "Canoe use", "Elevator use", "Barrel presence", "Tea serving"
+Example of GOOD categories: "Water Transportation and Vessels", "Urban Infrastructure and Buildings", "Food Preparation and Cooking", "Medical Treatment and Healthcare", "Emotional Reactions and Feelings"
+Example of BAD categories: "Items", "Activities", "Things", "Stuff", "General"
 
 Sample sentences:
 ${sampleSentences.slice(0, 150).join('\n')}
 
-Analyze the main TOPICS and THEMES across all sentences, then return ONLY a JSON array of 20-30 thematic category names.
-Format: ["Topic 1", "Topic 2", "Topic 3", ...]`;
+Analyze the main TOPICS and THEMES across all sentences, then return ONLY a JSON array of 25-40 clear and specific thematic category names.
+Format: ["Category 1", "Category 2", "Category 3", ...]`;
 
   const messages = [{ role: 'user', content: prompt }];
   const response = await callLongCatAPI(apiKey, messages, 3000);
@@ -260,13 +260,13 @@ function downloadAsPDF() {
   doc.text('Table of Contents', margin, yPosition);
   yPosition += 12;
 
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   
   let categoryIndex = 1;
   const sortedCategories = Object.entries(categorizedSentences).sort((a, b) => b[1].length - a[1].length);
   
   for (const [category, sentences] of sortedCategories) {
-    if (yPosition > pageHeight - 30) {
+    if (yPosition > pageHeight - 25) {
       addNewPage();
     }
     
@@ -285,12 +285,22 @@ function downloadAsPDF() {
       index: categoryIndex
     });
     
-    // Add the category name and count on the same line
-    doc.setFont(undefined, 'normal');
-    doc.text(`${categoryIndex}. ${category}`, margin + 5, yPosition);
-    doc.text(`(${sentences.length} sentences)`, pageWidth - margin - 5, yPosition, { align: 'right' });
+    // Calculate available width for category name
+    const countText = `(${sentences.length} sentences)`;
+    const countWidth = doc.getTextWidth(countText);
+    const availableWidth = contentWidth - countWidth - 10;
     
-    yPosition += 7;
+    // Wrap category text if needed
+    const wrappedCategory = doc.splitTextToSize(`${categoryIndex}. ${category}`, availableWidth);
+    
+    // Add the category name
+    doc.setFont(undefined, 'normal');
+    doc.text(wrappedCategory, margin + 5, yPosition);
+    
+    // Add sentence count aligned to the right on the first line
+    doc.text(countText, pageWidth - margin - 5, yPosition, { align: 'right' });
+    
+    yPosition += (wrappedCategory.length * 5) + 2;
     categoryIndex++;
   }
 
@@ -312,13 +322,18 @@ function downloadAsPDF() {
     doc.setFontSize(14);
     doc.setFont(undefined, 'bold');
     const categoryTitle = `${categoryIndex}. ${category}`;
-    doc.text(categoryTitle, margin, yPosition);
+    
+    // Wrap the title if it's too long
+    const wrappedTitle = doc.splitTextToSize(categoryTitle, contentWidth - 30);
+    doc.text(wrappedTitle, margin, yPosition);
+    
+    const titleHeight = wrappedTitle.length * 6;
     
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     doc.text(`${sentences.length} sentences`, pageWidth - margin, yPosition, { align: 'right' });
     
-    yPosition += 2;
+    yPosition += titleHeight + 2;
     
     // Draw a line under the category
     doc.setDrawColor(0, 0, 0);
@@ -326,8 +341,8 @@ function downloadAsPDF() {
     yPosition += 8;
 
     // Sentences
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
     
     sentences.forEach((sentence, idx) => {
       // Check if we need a new page
@@ -340,11 +355,11 @@ function downloadAsPDF() {
       doc.text(sentenceNum, margin, yPosition);
       
       // Sentence text with proper wrapping
-      const textX = margin + 8;
-      const wrapped = doc.splitTextToSize(sentence, contentWidth - 8);
+      const textX = margin + 10;
+      const wrapped = doc.splitTextToSize(sentence, contentWidth - 10);
       doc.text(wrapped, textX, yPosition);
       
-      yPosition += (wrapped.length * 5) + 4;
+      yPosition += (wrapped.length * 6) + 3;
     });
     
     yPosition += 8; // Space after category
@@ -358,11 +373,21 @@ function downloadAsPDF() {
       const targetPage = categoryPages[entry.category];
       if (targetPage) {
         doc.setPage(entry.tocPage);
-        // Remove old text and add new with proper link
-        doc.setFontSize(11);
+        
+        // Calculate available width for category name
+        const countText = `(${categorizedSentences[entry.category].length} sentences)`;
+        const countWidth = doc.getTextWidth(countText);
+        const availableWidth = contentWidth - countWidth - 10;
+        
+        // Create the clickable link
+        doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
         doc.setTextColor(0, 0, 255); // Blue color for links
-        doc.textWithLink(entry.tocText, margin + 5, entry.tocY, { 
+        
+        const linkText = `${entry.index}. ${entry.category}`;
+        const wrappedLink = doc.splitTextToSize(linkText, availableWidth);
+        
+        doc.textWithLink(wrappedLink, margin + 5, entry.tocY, { 
           pageNumber: targetPage
         });
         doc.setTextColor(0, 0, 0); // Reset to black
