@@ -240,7 +240,7 @@ function downloadAsPDF() {
   // ============ TITLE PAGE ============
   doc.setFontSize(32);
   doc.setFont(undefined, 'bold');
-  doc.text('Categorized Sentences', pageWidth / 2, 60, { align: 'center' });
+  doc.text('Categorized Sentences', pageWidth / 2, 80, { align: 'center' });
   
   doc.setFontSize(12);
   doc.setFont(undefined, 'normal');
@@ -249,26 +249,10 @@ function downloadAsPDF() {
     month: 'long', 
     day: 'numeric' 
   });
-  doc.text(`Generated on ${today}`, pageWidth / 2, 75, { align: 'center' });
+  doc.text(`Generated on ${today}`, pageWidth / 2, 95, { align: 'center' });
 
-  yPosition = 100;
-
-  // Summary
-  doc.setFontSize(14);
-  doc.setFont(undefined, 'bold');
-  doc.text('Summary', margin, yPosition);
-  yPosition += 10;
-
-  doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
-  
-  const totalSentencesCount = Object.values(categorizedSentences).reduce((acc, arr) => acc + arr.length, 0);
-  const totalCategoriesCount = Object.keys(categorizedSentences).length;
-  
-  doc.text(`Total Sentences: ${totalSentencesCount}`, margin, yPosition);
-  yPosition += 7;
-  doc.text(`Total Categories: ${totalCategoriesCount}`, margin, yPosition);
-  yPosition += 20;
+  // Start TOC on new page
+  addNewPage();
 
   // ============ TABLE OF CONTENTS ============
   doc.setFontSize(18);
@@ -277,7 +261,6 @@ function downloadAsPDF() {
   yPosition += 12;
 
   doc.setFontSize(11);
-  doc.setFont(undefined, 'normal');
   
   let categoryIndex = 1;
   const sortedCategories = Object.entries(categorizedSentences).sort((a, b) => b[1].length - a[1].length);
@@ -292,11 +275,6 @@ function downloadAsPDF() {
     const tocY = yPosition;
     const tocPage = doc.internal.getNumberOfPages();
     
-    // Create clickable link - we'll add the actual page later
-    doc.textWithLink(tocText, margin + 5, yPosition, { 
-      pageNumber: 1  // Placeholder, will be updated
-    });
-    
     // Store TOC entry info for later updating
     if (!doc.tocEntries) doc.tocEntries = [];
     doc.tocEntries.push({
@@ -307,7 +285,9 @@ function downloadAsPDF() {
       index: categoryIndex
     });
     
-    // Add sentence count
+    // Add the category name and count on the same line
+    doc.setFont(undefined, 'normal');
+    doc.text(`${categoryIndex}. ${category}`, margin + 5, yPosition);
     doc.text(`(${sentences.length} sentences)`, pageWidth - margin - 5, yPosition, { align: 'right' });
     
     yPosition += 7;
