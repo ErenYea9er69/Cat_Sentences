@@ -63,50 +63,105 @@ function showError(message) {
 async function identifyCategories(apiKey, sampleSentences) {
   updateProgress(5, 'Step 1/3: Identifying categories from document...');
 
-  const prompt = `Analyze these sample sentences from a document and identify 10-20 HIGHLY SPECIFIC categories based on the exact meaning and subject matter of each sentence.
+  const prompt = `Analyze these sample sentences from a document and identify EXACTLY 20-30 specific categories that cover all the main topics in the document.
 
 IMPORTANT RULES:
-- Each category must be SPECIFIC and DESCRIPTIVE (e.g., "Climate Change Effects on Agriculture" NOT "Nature")
-- Each category must represent a DISTINCT topic or concept
-- DO NOT use broad or generic categories
-- DO NOT combine multiple topics with "+" or "and"
-- Categories should reflect the precise meaning of the sentences
-- Use clear, descriptive names that capture the essence of the content
+- Create EXACTLY between 20 and 30 categories (no more, no less)
+- Each category should be specific and clear (e.g., "Climate Change Impact" NOT "Nature + Environment")
+- DO NOT use "+" or "and" to combine topics - make separate categories instead
+- DO NOT use quotes or special characters in category names
+- Use simple alphanumeric characters, spaces, and hyphens only
+- Categories should be focused but not overly narrow
+- Group related sentences under the same category when they share the same main topic
+- Balance between being specific and being practical
 
 Sample sentences:
 ${sampleSentences.slice(0, 100).join('\n')}
 
-Return ONLY a JSON array of specific category names, nothing else.
-Format: ["Specific Category 1", "Specific Category 2", "Specific Category 3", ...]`;
+Return ONLY a valid JSON array of exactly 20-30 category names, nothing else.
+Format: ["Category 1", "Category 2", "Category 3", ...]`;
 
   const messages = [{ role: 'user', content: prompt }];
   const response = await callLongCatAPI(apiKey, messages, 3000);
-  const jsonMatch = response.match(/\[.*\]/s);
-  if (jsonMatch) return JSON.parse(jsonMatch[0]);
-  throw new Error('Failed to parse categories from AI response');
+  
+  // Try to extract and parse JSON
+  let jsonMatch = response.match(/\[.*\]/s);
+  if (!jsonMatch) throw new Error('No JSON array found in AI response');
+  
+  let jsonStr = jsonMatch[0];
+  
+  // Clean up common JSON issues
+  jsonStr = jsonStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+  jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines inside strings
+  
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error('Failed to parse JSON:', jsonStr);
+    throw new Error('Failed to parse categories from AI response: ' + e.message);
+  }
 }
 
 async function categorizeBatch(apiKey, sentences, categories, batchIndex, totalBatches) {
   const percent = 10 + (batchIndex / totalBatches) * 80;
   updateProgress(percent, `Step 2/3: Categorizing batch ${batchIndex + 1}/${totalBatches}...`);
 
-  const prompt = `Categorize each sentence into the ONE MOST SPECIFIC category that matches its exact meaning.
+  const prompt = `You must categorize each sentence into ONE category from the list below.
 
-Available categories: ${categories.join(', ')}
+AVAILABLE CATEGORIES:
+${categories.map((cat, i) => `${i + 1}. ${cat}`).join('\n')}
 
-IMPORTANT: Choose the category that BEST matches the specific meaning and subject matter of each sentence. Be precise.
-
-Sentences:
+SENTENCES TO CATEGORIZE:
 ${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-Return ONLY a JSON array where each element is the category name for the corresponding sentence number. 
-Format: ["Category Name", "Category Name", ...]`;
+CRITICAL: Return ONLY a JSON array with ${sentences.length} category names. No explanations, no extra text.
+Example format: ["Category Name", "Category Name", "Category Name"]
+
+JSON array:`;
 
   const messages = [{ role: 'user', content: prompt }];
-  const response = await callLongCatAPI(apiKey, messages, 3000);
-  const jsonMatch = response.match(/\[.*\]/s);
-  if (jsonMatch) return JSON.parse(jsonMatch[0]);
-  throw new Error('Failed to parse categorization from AI response');
+  const response = await callLongCatAPI(apiKey, messages, 4000);
+  
+  // Try multiple methods to extract JSON
+  let jsonStr = null;
+  
+  // Method 1: Look for array between brackets
+  let jsonMatch = response.match(/\[[\s\S]*?\]/);
+  if (jsonMatch) {
+    jsonStr = jsonMatch[0];
+  } else {
+    // Method 2: Try to find it after "JSON array:" or similar
+    const afterColon = response.split(/(?:JSON array:|array:|output:)/i).pop();
+    if (afterColon) {
+      jsonMatch = afterColon.match(/\[[\s\S]*?\]/);
+      if (jsonMatch) jsonStr = jsonMatch[0];
+    }
+  }
+  
+  if (!jsonStr) {
+    console.error('AI Response:', response);
+    throw new Error('No JSON array found in AI response. Check console for details.');
+  }
+  
+  // Clean up JSON string
+  jsonStr = jsonStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+  jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
+  jsonStr = jsonStr.replace(/,\s*]/g, ']'); // Remove trailing commas
+  
+  try {
+    const result = JSON.parse(jsonStr);
+    if (!Array.isArray(result)) {
+      throw new Error('Response is not an array');
+    }
+    if (result.length !== sentences.length) {
+      console.warn(`Expected ${sentences.length} categories, got ${result.length}`);
+    }
+    return result;
+  } catch (e) {
+    console.error('Failed to parse JSON:', jsonStr);
+    console.error('Original response:', response);
+    throw new Error('Failed to parse categorization: ' + e.message);
+  }
 }
 
 function displayResults() {
