@@ -63,23 +63,27 @@ function showError(message) {
 async function identifyCategories(apiKey, sampleSentences) {
   updateProgress(5, 'Step 1/3: Identifying categories from document...');
 
-  const prompt = `Analyze these sample sentences from a document and identify EXACTLY 20-30 specific categories that cover all the main topics in the document.
+  const prompt = `Analyze these sample sentences and identify EXACTLY 20-30 THEMATIC categories based on the main topics and subjects discussed in the document.
 
-IMPORTANT RULES:
-- Create EXACTLY between 20 and 30 categories (no more, no less)
-- Each category should be specific and clear (e.g., "Climate Change Impact" NOT "Nature + Environment")
-- DO NOT use "+" or "and" to combine topics - make separate categories instead
-- DO NOT use quotes or special characters in category names
-- Use simple alphanumeric characters, spaces, and hyphens only
-- Categories should be focused but not overly narrow
-- Group related sentences under the same category when they share the same main topic
-- Balance between being specific and being practical
+CRITICAL RULES:
+- Create EXACTLY between 20 and 30 categories
+- Categories should be TOPICS or THEMES, not individual objects or actions
+- Think about the SUBJECT MATTER: What is this sentence about? (e.g., "Transportation", "Architecture", "Daily Life", "Technology")
+- DO NOT create categories like "Canoe use" or "Barrel presence" - these are too specific
+- DO create categories like "Water Transportation", "Historical Travel", "Building Navigation", "Household Items"
+- Group related concepts under broader themes
+- Each category should potentially contain multiple sentences about that topic
+- Use clear, topic-based names (2-4 words maximum)
+- NO special characters, quotes, or symbols in category names
+
+Example of GOOD categories: "Maritime Activities", "Historical Transportation", "Urban Architecture", "Food and Dining"
+Example of BAD categories: "Canoe use", "Elevator use", "Barrel presence", "Tea serving"
 
 Sample sentences:
-${sampleSentences.slice(0, 100).join('\n')}
+${sampleSentences.slice(0, 150).join('\n')}
 
-Return ONLY a valid JSON array of exactly 20-30 category names, nothing else.
-Format: ["Category 1", "Category 2", "Category 3", ...]`;
+Analyze the main TOPICS and THEMES across all sentences, then return ONLY a JSON array of 20-30 thematic category names.
+Format: ["Topic 1", "Topic 2", "Topic 3", ...]`;
 
   const messages = [{ role: 'user', content: prompt }];
   const response = await callLongCatAPI(apiKey, messages, 3000);
@@ -95,7 +99,9 @@ Format: ["Category 1", "Category 2", "Category 3", ...]`;
   jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines inside strings
   
   try {
-    return JSON.parse(jsonStr);
+    const categories = JSON.parse(jsonStr);
+    console.log('Identified categories:', categories);
+    return categories;
   } catch (e) {
     console.error('Failed to parse JSON:', jsonStr);
     throw new Error('Failed to parse categories from AI response: ' + e.message);
