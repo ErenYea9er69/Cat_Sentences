@@ -135,29 +135,171 @@ function downloadResults() {
 function downloadAsPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - (margin * 2);
+  let yPosition = margin;
 
-  let yPosition = 20;
+  // Color palette
+  const colors = {
+    primary: [102, 126, 234],
+    secondary: [118, 75, 162],
+    text: [51, 51, 51],
+    lightGray: [248, 249, 250],
+    darkGray: [108, 117, 125]
+  };
 
-  doc.setFontSize(20);
-  doc.text('Categorized Sentences', 20, yPosition);
-  yPosition += 20;
+  // Helper function to add a new page with header
+  function addNewPage() {
+    doc.addPage();
+    yPosition = margin;
+    
+    // Add page number footer
+    doc.setFontSize(9);
+    doc.setTextColor(...colors.darkGray);
+    doc.text(
+      `Page ${doc.internal.getNumberOfPages()}`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: 'center' }
+    );
+  }
 
+  // Title Page
+  doc.setFillColor(...colors.primary);
+  doc.rect(0, 0, pageWidth, 60, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(28);
+  doc.setFont(undefined, 'bold');
+  doc.text('Categorized Sentences', pageWidth / 2, 35, { align: 'center' });
+  
+  doc.setFontSize(12);
+  doc.setFont(undefined, 'normal');
+  const today = new Date().toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  doc.text(`Generated on ${today}`, pageWidth / 2, 50, { align: 'center' });
+
+  yPosition = 80;
+
+  // Summary Section
+  doc.setTextColor(...colors.text);
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text('Summary', margin, yPosition);
+  yPosition += 10;
+
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'normal');
+  
+  const totalSentencesCount = Object.values(categorizedSentences).reduce((acc, arr) => acc + arr.length, 0);
+  const totalCategoriesCount = Object.keys(categorizedSentences).length;
+  
+  doc.text(`Total Sentences: ${totalSentencesCount}`, margin, yPosition);
+  yPosition += 7;
+  doc.text(`Total Categories: ${totalCategoriesCount}`, margin, yPosition);
+  yPosition += 15;
+
+  // Table of Contents
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text('Table of Contents', margin, yPosition);
+  yPosition += 10;
+
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'normal');
+  
+  let categoryIndex = 1;
   for (const [category, sentences] of Object.entries(categorizedSentences)) {
-    doc.setFontSize(16);
-    doc.text(`${category} (${sentences.length} sentences)`, 20, yPosition);
-    yPosition += 10;
-
-    doc.setFontSize(12);
-    for (const sentence of sentences) {
-      if (yPosition > 280) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      const wrapped = doc.splitTextToSize(sentence, 170);
-      doc.text(wrapped, 20, yPosition);
-      yPosition += (wrapped.length * 8) + 5;
+    if (yPosition > pageHeight - 30) {
+      addNewPage();
     }
-    yPosition += 10;
+    doc.setTextColor(...colors.primary);
+    doc.text(`${categoryIndex}. ${category} (${sentences.length} sentences)`, margin + 5, yPosition);
+    yPosition += 7;
+    categoryIndex++;
+  }
+
+  // Start new page for categories
+  addNewPage();
+
+  // Category Details
+  categoryIndex = 1;
+  for (const [category, sentences] of Object.entries(categorizedSentences)) {
+    // Check if we need a new page for category header
+    if (yPosition > pageHeight - 40) {
+      addNewPage();
+    }
+
+    // Category Header with background
+    doc.setFillColor(...colors.primary);
+    doc.roundedRect(margin, yPosition - 8, contentWidth, 15, 3, 3, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text(`${categoryIndex}. ${category}`, margin + 5, yPosition);
+    
+    doc.setFontSize(10);
+    doc.text(`${sentences.length} sentences`, pageWidth - margin - 5, yPosition, { align: 'right' });
+    
+    yPosition += 18;
+
+    // Sentences
+    doc.setTextColor(...colors.text);
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    
+    sentences.forEach((sentence, idx) => {
+      // Check if we need a new page
+      if (yPosition > pageHeight - 40) {
+        addNewPage();
+      }
+
+      // Sentence number and bullet
+      const sentenceNum = `${idx + 1}.`;
+      doc.setTextColor(...colors.darkGray);
+      doc.text(sentenceNum, margin + 3, yPosition);
+      
+      // Sentence text with proper wrapping
+      doc.setTextColor(...colors.text);
+      const textX = margin + 12;
+      const wrapped = doc.splitTextToSize(sentence, contentWidth - 12);
+      
+      // Add light background for alternating sentences
+      if (idx % 2 === 0) {
+        doc.setFillColor(...colors.lightGray);
+        const textHeight = wrapped.length * 5 + 4;
+        doc.roundedRect(margin, yPosition - 4, contentWidth, textHeight, 2, 2, 'F');
+      }
+      
+      doc.text(wrapped, textX, yPosition);
+      yPosition += (wrapped.length * 5) + 6;
+    });
+    
+    yPosition += 10; // Space after category
+    categoryIndex++;
+  }
+
+  // Add page numbers to all pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(9);
+    doc.setTextColor(...colors.darkGray);
+    if (i > 1) { // Skip first page footer (title page already has custom footer)
+      doc.text(
+        `Page ${i} of ${totalPages}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: 'center' }
+      );
+    }
   }
 
   doc.save('categorized_sentences.pdf');
