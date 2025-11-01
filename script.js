@@ -57,7 +57,7 @@ function updateProgress(percent, status) {
 function showError(message) {
   const statusDiv = document.getElementById('statusText');
   statusDiv.className = 'status error';
-  statusDiv.textContent = '❌ Error: ' + message;
+  statusDiv.textContent = 'âŒ Error: ' + message;
 }
 
 async function identifyCategories(apiKey, sampleSentences) {
@@ -386,15 +386,33 @@ function downloadAsPDF() {
         const countWidth = doc.getTextWidth(countText);
         const availableWidth = contentWidth - countWidth - 10;
         
-        // Create the clickable link
+        // Create the clickable link - use the original string, not the wrapped array
         doc.setTextColor(0, 0, 255); // Blue color for links
         
         const linkText = `${entry.index}. ${entry.category}`;
-        const wrappedLink = doc.splitTextToSize(linkText, availableWidth);
         
-        doc.textWithLink(wrappedLink, margin + 5, entry.tocY, { 
-          pageNumber: targetPage
-        });
+        // Check if text needs wrapping
+        const textWidth = doc.getTextWidth(linkText);
+        
+        if (textWidth <= availableWidth) {
+          // Text fits on one line - use textWithLink directly
+          doc.textWithLink(linkText, margin + 5, entry.tocY, { 
+            pageNumber: targetPage
+          });
+        } else {
+          // Text is too long - truncate or use multiple lines without links
+          // Option 1: Truncate with ellipsis
+          let truncated = linkText;
+          while (doc.getTextWidth(truncated + '...') > availableWidth && truncated.length > 10) {
+            truncated = truncated.slice(0, -1);
+          }
+          truncated += '...';
+          
+          doc.textWithLink(truncated, margin + 5, entry.tocY, { 
+            pageNumber: targetPage
+          });
+        }
+        
         doc.setTextColor(0, 0, 0); // Reset to black
       }
     });
