@@ -63,15 +63,24 @@ function showError(message) {
 async function identifyCategories(apiKey, sampleSentences) {
   updateProgress(5, 'Step 1/3: Identifying categories from document...');
 
-  const prompt = `Analyze these sample sentences from a document and identify 5-10 main categories that cover all topics. Return ONLY a JSON array of category names, nothing else.
+  const prompt = `Analyze these sample sentences from a document and identify 10-20 HIGHLY SPECIFIC categories based on the exact meaning and subject matter of each sentence.
+
+IMPORTANT RULES:
+- Each category must be SPECIFIC and DESCRIPTIVE (e.g., "Climate Change Effects on Agriculture" NOT "Nature")
+- Each category must represent a DISTINCT topic or concept
+- DO NOT use broad or generic categories
+- DO NOT combine multiple topics with "+" or "and"
+- Categories should reflect the precise meaning of the sentences
+- Use clear, descriptive names that capture the essence of the content
 
 Sample sentences:
 ${sampleSentences.slice(0, 100).join('\n')}
 
-Return format: ["Category1", "Category2", "Category3", ...]`;
+Return ONLY a JSON array of specific category names, nothing else.
+Format: ["Specific Category 1", "Specific Category 2", "Specific Category 3", ...]`;
 
   const messages = [{ role: 'user', content: prompt }];
-  const response = await callLongCatAPI(apiKey, messages);
+  const response = await callLongCatAPI(apiKey, messages, 3000);
   const jsonMatch = response.match(/\[.*\]/s);
   if (jsonMatch) return JSON.parse(jsonMatch[0]);
   throw new Error('Failed to parse categories from AI response');
@@ -81,15 +90,20 @@ async function categorizeBatch(apiKey, sentences, categories, batchIndex, totalB
   const percent = 10 + (batchIndex / totalBatches) * 80;
   updateProgress(percent, `Step 2/3: Categorizing batch ${batchIndex + 1}/${totalBatches}...`);
 
-  const prompt = `Categorize each sentence into ONE of these categories: ${categories.join(', ')}.
+  const prompt = `Categorize each sentence into the ONE MOST SPECIFIC category that matches its exact meaning.
+
+Available categories: ${categories.join(', ')}
+
+IMPORTANT: Choose the category that BEST matches the specific meaning and subject matter of each sentence. Be precise.
 
 Sentences:
 ${sentences.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-Return ONLY a JSON array where each element is the category name for the corresponding sentence number. Format: ["Category", "Category", ...]`;
+Return ONLY a JSON array where each element is the category name for the corresponding sentence number. 
+Format: ["Category Name", "Category Name", ...]`;
 
   const messages = [{ role: 'user', content: prompt }];
-  const response = await callLongCatAPI(apiKey, messages);
+  const response = await callLongCatAPI(apiKey, messages, 3000);
   const jsonMatch = response.match(/\[.*\]/s);
   if (jsonMatch) return JSON.parse(jsonMatch[0]);
   throw new Error('Failed to parse categorization from AI response');
