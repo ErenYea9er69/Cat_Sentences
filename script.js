@@ -217,39 +217,30 @@ function downloadAsPDF() {
   const contentWidth = pageWidth - (margin * 2);
   let yPosition = margin;
 
-  // Color palette
-  const colors = {
-    primary: [102, 126, 234],
-    secondary: [118, 75, 162],
-    text: [51, 51, 51],
-    lightGray: [248, 249, 250],
-    darkGray: [108, 117, 125]
-  };
+  // Store page numbers where each category starts for links
+  const categoryPages = {};
 
-  // Helper function to add a new page with header
+  // Helper function to add a new page
   function addNewPage() {
     doc.addPage();
     yPosition = margin;
     
     // Add page number footer
     doc.setFontSize(9);
-    doc.setTextColor(...colors.darkGray);
+    doc.setTextColor(128, 128, 128);
     doc.text(
-      `Page ${doc.internal.getNumberOfPages()}`,
+      `${doc.internal.getNumberOfPages()}`,
       pageWidth / 2,
       pageHeight - 10,
       { align: 'center' }
     );
+    doc.setTextColor(0, 0, 0);
   }
 
-  // Title Page
-  doc.setFillColor(...colors.primary);
-  doc.rect(0, 0, pageWidth, 60, 'F');
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(28);
+  // ============ TITLE PAGE ============
+  doc.setFontSize(32);
   doc.setFont(undefined, 'bold');
-  doc.text('Categorized Sentences', pageWidth / 2, 35, { align: 'center' });
+  doc.text('Categorized Sentences', pageWidth / 2, 60, { align: 'center' });
   
   doc.setFontSize(12);
   doc.setFont(undefined, 'normal');
@@ -258,13 +249,12 @@ function downloadAsPDF() {
     month: 'long', 
     day: 'numeric' 
   });
-  doc.text(`Generated on ${today}`, pageWidth / 2, 50, { align: 'center' });
+  doc.text(`Generated on ${today}`, pageWidth / 2, 75, { align: 'center' });
 
-  yPosition = 80;
+  yPosition = 100;
 
-  // Summary Section
-  doc.setTextColor(...colors.text);
-  doc.setFontSize(16);
+  // Summary
+  doc.setFontSize(14);
   doc.setFont(undefined, 'bold');
   doc.text('Summary', margin, yPosition);
   yPosition += 10;
@@ -278,104 +268,130 @@ function downloadAsPDF() {
   doc.text(`Total Sentences: ${totalSentencesCount}`, margin, yPosition);
   yPosition += 7;
   doc.text(`Total Categories: ${totalCategoriesCount}`, margin, yPosition);
-  yPosition += 15;
+  yPosition += 20;
 
-  // Table of Contents
-  doc.setFontSize(16);
+  // ============ TABLE OF CONTENTS ============
+  doc.setFontSize(18);
   doc.setFont(undefined, 'bold');
   doc.text('Table of Contents', margin, yPosition);
-  yPosition += 10;
+  yPosition += 12;
 
   doc.setFontSize(11);
   doc.setFont(undefined, 'normal');
   
   let categoryIndex = 1;
-  for (const [category, sentences] of Object.entries(categorizedSentences)) {
+  const sortedCategories = Object.entries(categorizedSentences).sort((a, b) => b[1].length - a[1].length);
+  
+  for (const [category, sentences] of sortedCategories) {
     if (yPosition > pageHeight - 30) {
       addNewPage();
     }
-    doc.setTextColor(...colors.primary);
-    doc.text(`${categoryIndex}. ${category} (${sentences.length} sentences)`, margin + 5, yPosition);
+    
+    // Store the position for later linking (we'll update after we know the actual pages)
+    const tocText = `${categoryIndex}. ${category}`;
+    const tocY = yPosition;
+    const tocPage = doc.internal.getNumberOfPages();
+    
+    // Create clickable link - we'll add the actual page later
+    doc.textWithLink(tocText, margin + 5, yPosition, { 
+      pageNumber: 1  // Placeholder, will be updated
+    });
+    
+    // Store TOC entry info for later updating
+    if (!doc.tocEntries) doc.tocEntries = [];
+    doc.tocEntries.push({
+      category: category,
+      tocPage: tocPage,
+      tocY: tocY,
+      tocText: tocText,
+      index: categoryIndex
+    });
+    
+    // Add sentence count
+    doc.text(`(${sentences.length} sentences)`, pageWidth - margin - 5, yPosition, { align: 'right' });
+    
     yPosition += 7;
     categoryIndex++;
   }
 
-  // Start new page for categories
+  // ============ CATEGORY CONTENT PAGES ============
   addNewPage();
 
-  // Category Details
   categoryIndex = 1;
-  for (const [category, sentences] of Object.entries(categorizedSentences)) {
+  for (const [category, sentences] of sortedCategories) {
+    // Store the page where this category starts
+    categoryPages[category] = doc.internal.getNumberOfPages();
+    
     // Check if we need a new page for category header
-    if (yPosition > pageHeight - 40) {
+    if (yPosition > pageHeight - 50) {
       addNewPage();
+      categoryPages[category] = doc.internal.getNumberOfPages();
     }
 
-    // Category Header with background
-    doc.setFillColor(...colors.primary);
-    doc.roundedRect(margin, yPosition - 8, contentWidth, 15, 3, 3, 'F');
-    
-    doc.setTextColor(255, 255, 255);
+    // Category Header (Bold)
     doc.setFontSize(14);
     doc.setFont(undefined, 'bold');
-    doc.text(`${categoryIndex}. ${category}`, margin + 5, yPosition);
+    const categoryTitle = `${categoryIndex}. ${category}`;
+    doc.text(categoryTitle, margin, yPosition);
     
     doc.setFontSize(10);
-    doc.text(`${sentences.length} sentences`, pageWidth - margin - 5, yPosition, { align: 'right' });
+    doc.setFont(undefined, 'normal');
+    doc.text(`${sentences.length} sentences`, pageWidth - margin, yPosition, { align: 'right' });
     
-    yPosition += 18;
+    yPosition += 2;
+    
+    // Draw a line under the category
+    doc.setDrawColor(0, 0, 0);
+    doc.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 8;
 
     // Sentences
-    doc.setTextColor(...colors.text);
-    doc.setFont(undefined, 'normal');
     doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
     
     sentences.forEach((sentence, idx) => {
       // Check if we need a new page
-      if (yPosition > pageHeight - 40) {
+      if (yPosition > pageHeight - 35) {
         addNewPage();
       }
 
-      // Sentence number and bullet
+      // Sentence number
       const sentenceNum = `${idx + 1}.`;
-      doc.setTextColor(...colors.darkGray);
-      doc.text(sentenceNum, margin + 3, yPosition);
+      doc.text(sentenceNum, margin, yPosition);
       
       // Sentence text with proper wrapping
-      doc.setTextColor(...colors.text);
-      const textX = margin + 12;
-      const wrapped = doc.splitTextToSize(sentence, contentWidth - 12);
-      
-      // Add light background for alternating sentences
-      if (idx % 2 === 0) {
-        doc.setFillColor(...colors.lightGray);
-        const textHeight = wrapped.length * 5 + 4;
-        doc.roundedRect(margin, yPosition - 4, contentWidth, textHeight, 2, 2, 'F');
-      }
-      
+      const textX = margin + 8;
+      const wrapped = doc.splitTextToSize(sentence, contentWidth - 8);
       doc.text(wrapped, textX, yPosition);
-      yPosition += (wrapped.length * 5) + 6;
+      
+      yPosition += (wrapped.length * 5) + 4;
     });
     
-    yPosition += 10; // Space after category
+    yPosition += 8; // Space after category
     categoryIndex++;
   }
 
-  // Add page numbers to all pages
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(9);
-    doc.setTextColor(...colors.darkGray);
-    if (i > 1) { // Skip first page footer (title page already has custom footer)
-      doc.text(
-        `Page ${i} of ${totalPages}`,
-        pageWidth / 2,
-        pageHeight - 10,
-        { align: 'center' }
-      );
-    }
+  // ============ UPDATE TABLE OF CONTENTS LINKS ============
+  // Now go back and update all the TOC links with the actual page numbers
+  if (doc.tocEntries) {
+    doc.tocEntries.forEach(entry => {
+      const targetPage = categoryPages[entry.category];
+      if (targetPage) {
+        doc.setPage(entry.tocPage);
+        // Remove old text and add new with proper link
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(0, 0, 255); // Blue color for links
+        doc.textWithLink(entry.tocText, margin + 5, entry.tocY, { 
+          pageNumber: targetPage
+        });
+        doc.setTextColor(0, 0, 0); // Reset to black
+      }
+    });
   }
+
+  // Go back to last page to ensure proper page count
+  doc.setPage(doc.internal.getNumberOfPages());
 
   doc.save('categorized_sentences.pdf');
 }
